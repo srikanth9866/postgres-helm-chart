@@ -47,63 +47,102 @@ spec:
             sleep 2
           done
           
-          echo "Creating databases..."
-          psql -d postgres -f /scripts/init.sql
-          
-          echo "Importing schema dump..."
+          echo "========================================="
+          echo "STEP 1: Importing PostgreSQL DB Schema"
+          echo "========================================="
           if [ -f /schema/aw_pg_schema.dump ]; then
-            pg_restore -d postgres /schema/aw_pg_schema.dump 2>/dev/null || echo "Schema import completed with warnings"
+            echo "Importing aw_pg_schema.dump..."
+            if file /schema/aw_pg_schema.dump | grep -q "text"; then
+              psql -U {{ .Values.postgres.auth.username }} -d postgres -f /schema/aw_pg_schema.dump
+            else
+              pg_restore -U {{ .Values.postgres.auth.username }} -d postgres /schema/aw_pg_schema.dump 2>/dev/null || true
+            fi
+            echo "Schema import completed!"
+          else
+            echo "WARNING: aw_pg_schema.dump not found!"
           fi
           
-          # Function to import SQL files to a specific database
-          import_sql_files() {
+          echo "========================================="
+          echo "STEP 2: Creating databases"
+          echo "========================================="
+          
+          create_db() {
             local db_name=$1
-            local sql_dir="/sql/${db_name}"
-            
-            if [ -d "$sql_dir" ]; then
-              echo "Importing SQL files to $db_name..."
-              for sql_file in "$sql_dir"/*.sql; do
-                if [ -f "$sql_file" ]; then
-                  echo "  Importing $(basename $sql_file)..."
-                  psql -d "$db_name" -f "$sql_file"
-                fi
-              done
-            fi
+            echo "Creating database: $db_name"
+            psql -U {{ .Values.postgres.auth.username }} -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$db_name'" | grep -q 1 || psql -U {{ .Values.postgres.auth.username }} -d postgres -c "CREATE DATABASE $db_name"
           }
           
-          # Import in specific order (config_master first due to dependencies)
-          echo "Starting SQL imports..."
-          import_sql_files "config_master"
-          import_sql_files "login_manager_service"
-          import_sql_files "attendance_manager_service"
-          import_sql_files "download_manager_service"
-          import_sql_files "postmaster_service"
-          import_sql_files "rostering_service"
-          import_sql_files "api_gateway_service"
+          create_db "attendance_manager_service"
+          create_db "config_master"
+          create_db "login_manager_service"
+          create_db "download_manager_service"
+          create_db "postmaster_service"
+          create_db "rostering_service"
+          create_db "api_gateway_service"
           
+          echo "========================================="
+          echo "STEP 3: Importing SQL files for core platform services"
+          echo "========================================="
+          
+          echo "1. Importing attendance-manager-service.sql into attendance_manager_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d attendance_manager_service -f /sql/attendance-manager-service.sql
+          
+          echo "2. Importing config_master.sql into config_master..."
+          psql -U {{ .Values.postgres.auth.username }} -d config_master -f /sql/config_master.sql
+          
+          echo "3. Importing config_service_error_master.sql into config_master..."
+          psql -U {{ .Values.postgres.auth.username }} -d config_master -f /sql/config_service_error_master.sql
+          
+          echo "4. Importing Endpoints-Data.sql into login_manager_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d login_manager_service -f /sql/Endpoints-Data.sql
+          
+          echo "5. Importing login_error_master.sql into login_manager_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d login_manager_service -f /sql/login_error_master.sql
+          
+          echo "6. Importing login_manager.sql into login_manager_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d login_manager_service -f /sql/login_manager.sql
+          
+          echo "7. Importing System-Integrations-API.sql into config_master..."
+          psql -U {{ .Values.postgres.auth.username }} -d config_master -f /sql/System-Integrations-API.sql
+          
+          echo "8. Importing download-config-master.sql into download_manager_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d download_manager_service -f /sql/download-config-master.sql
+          
+          echo "9. Importing postmaster-service-config.sql into postmaster_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d postmaster_service -f /sql/postmaster-service-config.sql
+          
+          echo "10. Importing roster-manager-service-config.sql into rostering_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d rostering_service -f /sql/roster-manager-service-config.sql
+          
+          echo "11. Importing transformation_metainf_config.sql into config_master..."
+          psql -U {{ .Values.postgres.auth.username }} -d config_master -f /sql/transformation_metainf_config.sql
+          
+          echo "12. Importing tenant_service.sql into config_master..."
+          psql -U {{ .Values.postgres.auth.username }} -d config_master -f /sql/tenant_service.sql
+          
+          echo "13. Importing api_gateway.sql into api_gateway_service..."
+          psql -U {{ .Values.postgres.auth.username }} -d api_gateway_service -f /sql/api_gateway.sql
+          
+          echo "========================================="
           echo "Database initialization completed successfully!"
+          echo "========================================="
         volumeMounts:
-        - name: scripts
-          mountPath: /scripts
         - name: schema
           mountPath: /schema
         - name: sql
           mountPath: /sql
       volumes:
-      - name: scripts
-        configMap:
-          name: {{ include "postgres.fullname" . }}-db-init-script
       - name: schema
         projected:
           sources:
-          {{- range $path, $_ := .Files.Glob "DB/*.dump" }}
+          {{- range $path, $_ := .Files.Glob "files/DB/*.dump" }}
           - configMap:
               name: {{ include "postgres.fullname" $ }}-schema-{{ trimSuffix ".dump" (base $path) }}
           {{- end }}
       - name: sql
         projected:
           sources:
-          {{- range $path, $_ := .Files.Glob "DB/*.sql" }}
+          {{- range $path, $_ := .Files.Glob "files/DB/*.sql" }}
           - configMap:
               name: {{ include "postgres.fullname" $ }}-sql-{{ trimSuffix ".sql" (base $path) | replace "_" "-" | lower }}
           {{- end }}
