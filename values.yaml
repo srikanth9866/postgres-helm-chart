@@ -13,7 +13,7 @@ postgres:
 
   auth:
     username: postgres
-    password: postgres123
+    password: postgres
     database: postgres
 
   config:

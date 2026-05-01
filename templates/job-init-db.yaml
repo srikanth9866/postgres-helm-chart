@@ -131,19 +131,25 @@ spec:
           mountPath: /schema
         - name: sql
           mountPath: /sql
-      volumes:
+            volumes:
       - name: schema
         projected:
           sources:
           {{- range $path, $_ := .Files.Glob "files/DB/*.dump" }}
+          {{- $fileName := base $path }}
+          {{- $baseName := trimSuffix ".dump" $fileName }}
+          {{- $safeName := $baseName | lower | replace "_" "-" | replace "." "-" }}
           - configMap:
-              name: {{ include "postgres.fullname" $ }}-schema-{{ trimSuffix ".dump" (base $path) }}
+              name: {{ include "postgres.fullname" $ }}-schema-{{ $safeName }}
           {{- end }}
       - name: sql
         projected:
           sources:
           {{- range $path, $_ := .Files.Glob "files/DB/*.sql" }}
+          {{- $fileName := base $path }}
+          {{- $baseName := trimSuffix ".sql" $fileName }}
+          {{- $safeName := $baseName | lower | replace "_" "-" | replace "." "-" }}
           - configMap:
-              name: {{ include "postgres.fullname" $ }}-sql-{{ trimSuffix ".sql" (base $path) | replace "_" "-" | lower }}
+              name: {{ include "postgres.fullname" $ }}-sql-{{ $safeName }}
           {{- end }}
 {{- end }}

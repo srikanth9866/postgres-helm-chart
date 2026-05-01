@@ -3,7 +3,6 @@
 {{- $name := include "postgres.fullname" . }}
 {{- $namespace := .Release.Namespace }}
 
-{{- /* Use correct path: files/DB/*.sql */ -}}
 {{- $sqlFiles := .Files.Glob "files/DB/*.sql" }}
 {{- $dumpFiles := .Files.Glob "files/DB/*.dump" }}
 
@@ -15,11 +14,13 @@
 {{- range $path, $_ := $sqlFiles }}
 {{- $fileName := base $path }}
 {{- $sqlContent := $files.Get $path }}
+{{- $baseName := trimSuffix ".sql" $fileName }}
+{{- $safeName := $baseName | lower | replace "_" "-" | replace "." "-" }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ printf "%s-sql-%s" $name (trimSuffix ".sql" $fileName | replace "_" "-" | replace "." "-" | lower) }}
+  name: {{ printf "%s-sql-%s" $name $safeName }}
   namespace: {{ $namespace }}
   labels:
     {{- include "postgres.labels" $ | nindent 4 }}
@@ -33,11 +34,13 @@ data:
 {{- range $path, $_ := $dumpFiles }}
 {{- $fileName := base $path }}
 {{- $dumpContent := $files.Get $path }}
+{{- $baseName := trimSuffix ".dump" $fileName }}
+{{- $safeName := $baseName | lower | replace "_" "-" | replace "." "-" }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ printf "%s-schema-%s" $name (trimSuffix ".dump" $fileName) }}
+  name: {{ printf "%s-schema-%s" $name $safeName }}
   namespace: {{ $namespace }}
   labels:
     {{- include "postgres.labels" $ | nindent 4 }}
