@@ -1,0 +1,44 @@
+{{- if eq .Values.postgres.deploymentType "deployment" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "postgres.fullname" . }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.postgres.replicas }}
+  selector:
+    matchLabels:
+      {{- include "postgres.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "postgres.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: postgres
+        image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+        imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.postgres.service.targetPort }}
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: {{ .Values.postgres.auth.username }}
+        - name: POSTGRES_PASSWORD
+          value: {{ .Values.postgres.auth.password }}
+        - name: POSTGRES_DB
+          value: {{ .Values.postgres.auth.database }}
+        {{- range $key, $value := .Values.postgres.config }}
+        - name: POSTGRES_{{ $key | upper }}
+          value: {{ $value | quote }}
+        {{- end }}
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          {{- toYaml .Values.postgres.resources | nindent 10 }}
+      volumes:
+      - name: data
+        emptyDir: {}
+{{- end }}

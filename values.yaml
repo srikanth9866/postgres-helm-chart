@@ -1,0 +1,65 @@
+nameOverride: ""
+fullnameOverride: ""
+
+postgres:
+  enabled: true
+  # Options: "deployment" (no PVC) or "statefulset" (with optional PVC)
+  deploymentType: "statefulset"
+
+  image:
+    repository: postgres
+    tag: "14"
+    pullPolicy: IfNotPresent
+
+  auth:
+    username: postgres
+    password: postgres123
+    database: postgres
+
+  config:
+    maxConnections: "100"
+    sharedBuffers: "128MB"
+
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+  service:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+
+  replicas: 1
+
+  # Only used when deploymentType=statefulset
+  persistence:
+    enabled: true # Set to false if clients don't want PVC
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+restore:
+  enabled: true
+
+  # Import order (config_master first due to dependencies)
+  importOrder:
+  - config_master
+  - login_manager_service
+  - attendance_manager_service
+  - download_manager_service
+  - postmaster_service
+  - rostering_service
+  - api_gateway_service
+
+  job:
+    backoffLimit: 3
+    ttlSecondsAfterFinished: 300
+    restartPolicy: Never

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgres
+description: PostgreSQL Helm chart with automated SQL import
+type: application
+version: 0.1.0
+appVersion: "14"

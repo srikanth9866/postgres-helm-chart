@@ -1,0 +1,59 @@
+{{- if .Values.restore.enabled }}
+{{- $files := .Files }}
+{{- $name := include "postgres.fullname" . }}
+{{- $namespace := .Release.Namespace }}
+
+# SQL Files ConfigMaps
+{{- range $path, $_ := .Files.Glob "DB/*.sql" }}
+{{- $fileName := base $path }}
+{{- $sqlContent := $files.Get $path }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-sql-%s" $name (trimSuffix ".sql" $fileName | replace "_" "-" | lower) }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "postgres.labels" $ | nindent 4 }}
+    postgres-file-type: "sql"
+    postgres-file-name: {{ $fileName | quote }}
+data:
+  {{ $fileName }}: {{ $sqlContent | quote }}
+{{- end }}
+
+# Schema Dump ConfigMap
+{{- range $path, $_ := .Files.Glob "DB/*.dump" }}
+{{- $fileName := base $path }}
+{{- $dumpContent := $files.Get $path }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-schema-%s" $name (trimSuffix ".dump" $fileName) }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "postgres.labels" $ | nindent 4 }}
+    postgres-file-type: "schema"
+data:
+  {{ $fileName }}: {{ $dumpContent | b64enc | quote }}
+{{- end }}
+
+# Database mapping ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-db-init-script" $name }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  init.sql: |
+    -- Create databases
+    SELECT 'CREATE DATABASE attendance_manager_service' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'attendance_manager_service')\gexec
+    SELECT 'CREATE DATABASE config_master' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'config_master')\gexec
+    SELECT 'CREATE DATABASE login_manager_service' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'login_manager_service')\gexec
+    SELECT 'CREATE DATABASE download_manager_service' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'download_manager_service')\gexec
+    SELECT 'CREATE DATABASE postmaster_service' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'postmaster_service')\gexec
+    SELECT 'CREATE DATABASE rostering_service' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rostering_service')\gexec
+    SELECT 'CREATE DATABASE api_gateway_service' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'api_gateway_service')\gexec
+{{- end }}
